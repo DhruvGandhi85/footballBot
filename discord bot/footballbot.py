@@ -27,7 +27,8 @@ async def on_message(message):
         response = requests.get(url)
         soup = BeautifulSoup(response.text, 'html.parser')
         stats_tables = soup.find_all('table')
-        headers = [th.text.strip() for th in stats_tables[1].select('thead th')]
+        headers = [th.text.strip()
+                   for th in stats_tables[1].select('thead th')]
         orig_headers = headers[1:]
         data_rows = [[td.text.strip() for td in tr.select('td')] for tr in
                      stats_tables[1].select('tbody tr')][:weeks]
