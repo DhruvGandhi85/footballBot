@@ -54,8 +54,12 @@ def get_player_stats(first_name: str, last_name: str, weeks: int) -> pd.DataFram
     response = requests.get(url)
     soup = BeautifulSoup(response.text, 'html.parser')
     stats_tables = soup.find_all('table')
-
-    headers = [th.text.strip() for th in stats_tables[1].select('thead th')]
+    try:
+        headers = [th.text.strip()
+                   for th in stats_tables[1].select('thead th')]
+    except Exception as e:
+        raise ValueError(
+            f"Failed to retrieve stats for {first_name} {last_name}")
     player_pos = get_player_position(headers)
     renamed_headers = get_renamed_headers(headers, player_pos)
 
@@ -105,16 +109,7 @@ def plot_weekly_yards(df_player: pd.DataFrame) -> str:
 
 
 def calculate_fantasy_points(df_player: pd.DataFrame) -> float:
-    """
-    Calculates fantasy points for a player based on a dictionary of multiplier values.
 
-    Parameters:
-    df_player (pd.DataFrame): Dataframe containing player stats.
-    multipliers (dict): Dictionary containing multiplier values for different stat categories.
-
-    Returns:
-    float: Total fantasy points for the player.
-    """
     # Calculate fantasy points for each week based on the multiplier values
     fantasy_points = []
     multipliers = {'PASS_YDS': 0.04, 'PASS_TD': 4,
@@ -130,16 +125,7 @@ def calculate_fantasy_points(df_player: pd.DataFrame) -> float:
 
 
 def plot_fantasy_points_over_time(df_player: pd.DataFrame, fantasy_points: List[float]) -> str:
-    """
-    Plots the fantasy points of a player over time and saves the chart as an image file.
 
-    Parameters:
-    df_player (pd.DataFrame): Dataframe containing player stats.
-    fantasy_points (List[float]): List of fantasy points for each week.
-
-    Returns:
-    str: Path of the saved chart image.
-    """
     # Plot the fantasy points over time
     x = np.array(df_player.index).astype(int)
     y = np.array(fantasy_points).astype(float)
@@ -178,8 +164,15 @@ async def on_message(message):
 
     if message.content.startswith('$player'):
         args = message.content.split('$player ')[1].split()
-        first_name, last_name, weeks = args[0], args[1], int(args[2])
-        df_player = get_player_stats(first_name, last_name, weeks)
+        if len(args) == 3:
+            first_name, last_name, weeks = args[0], args[1], int(args[2])
+        elif len(args) == 2:
+            first_name, last_name, weeks = args[0], args[1], 5
+        try: 
+            df_player = get_player_stats(first_name, last_name, weeks)
+        except ValueError as e:
+            await message.channel.send(f"Failed to retrieve stats for {first_name} {last_name}")            
+            return
         player_stats = calculate_fantasy_points(df_player)
 
         # Send the player stats as a formatted message
@@ -199,9 +192,7 @@ async def on_message(message):
 
 
 async def send_player_stats(channel, first_name, last_name, weeks, df_player):
-    """
-    Sends a message with formatted player stats to the given Discord channel.
-    """
+
     output = f"**{first_name} {last_name} - Stats for last {weeks} weeks:**\n\n"
     for index, row in df_player.iterrows():
         output += f"Week {index}:\n"
@@ -217,14 +208,12 @@ async def send_player_stats(channel, first_name, last_name, weeks, df_player):
 
 
 async def send_chart_as_attachment(channel, chart_path):
-    """
-    Sends a chart file as an attachment to the given Discord channel.
-    """
+
     with open(chart_path, 'rb') as f:
         chart = discord.File(f)
         await channel.send(file=chart)
 
 
-with open("discord bot/bot auth token.txt", "r") as file:
+with open("bot auth token.txt", "r") as file:
     file_contents = file.read()
 client.run(file_contents)
