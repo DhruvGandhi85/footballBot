@@ -1,13 +1,15 @@
 import os
 from typing import List
+from contextlib import suppress
+
 import discord
 import requests
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from io import BytesIO
 from bs4 import BeautifulSoup
 from scipy.stats import linregress
-import discord
 from discord.ext import commands
 
 
@@ -147,8 +149,11 @@ def plot_fantasy_points_over_time(df_player: pd.DataFrame, fantasy_points: List[
     return chart_path
 
 
-intents = discord.Intents.all()
+intents = discord.Intents.default()
+intents.message_content = True
+
 client = discord.Client(command_prefix='!', intents=intents)
+bot = commands.Bot(command_prefix='!', intents=intents)
 
 
 @client.event
@@ -174,61 +179,24 @@ async def on_message(message):
             return
         player_stats = calculate_fantasy_points(df_player)
 
+        # Send the player stats as a formatted message
         await send_player_stats(message.channel, first_name, last_name, weeks, df_player)
 
+        # Send the yards chart as an attachment
         yds_chart_path = plot_weekly_yards(df_player)
         await send_chart_as_attachment(message.channel, yds_chart_path)
 
+        # Send the fantasy points chart as an attachment
         pts_chart_path = plot_fantasy_points_over_time(df_player, player_stats)
         await send_chart_as_attachment(message.channel, pts_chart_path)
 
+        # Remove the chart files
         os.remove(yds_chart_path)
         os.remove(pts_chart_path)
 
-client = commands.Bot(command_prefix=".", intents=intents)
-
-
-class Buttons(discord.ui.View):
-    def __init__(self, *, timeout=180):
-        super().__init__(timeout=timeout)
-
-    # or .primary
-    @discord.ui.button(label="Blurple Button", style=discord.ButtonStyle.blurple)
-    async def blurple_button(self, button: discord.ui.Button, interaction: discord.Interaction):
-        button.disabled = True
-        await interaction.response.edit_message(view=self)
-
-    # or .secondary/.grey
-    @discord.ui.button(label="Gray Button", style=discord.ButtonStyle.gray)
-    async def gray_button(self, button: discord.ui.Button, interaction: discord.Interaction):
-        button.disabled = True
-        await interaction.response.edit_message(view=self)
-
-    # or .success
-    @discord.ui.button(label="Green Button", style=discord.ButtonStyle.green)
-    async def green_button(self, button: discord.ui.Button, interaction: discord.Interaction):
-        button.disabled = True
-        await interaction.response.edit_message(view=self)
-
-    # or .danger
-    @discord.ui.button(label="Red Button", style=discord.ButtonStyle.red)
-    async def red_button(self, button: discord.ui.Button, interaction: discord.Interaction):
-        button.disabled = True
-        await interaction.response.edit_message(view=self)
-
-
-@client.command()
-async def button(message):
-    view = Buttons()
-    view.add_item(discord.ui.Button(label="URL Button",
-                  style=discord.ButtonStyle.link, url="https://github.com/lykn"))
-    await message.send("This message has buttons!", view=view)
-
 
 async def send_player_stats(channel, first_name, last_name, weeks, df_player):
-
-    output = f"**{first_name} {last_name} - Stats for last {weeks} weeks:**\n"
-    output += f"**Average Fantasy Points:** {sum(calculate_fantasy_points(df_player))/weeks}\n\n"
+    output = f"**{first_name} {last_name} - Stats for last {weeks} weeks:**\n\n"
     for index, row in df_player.iterrows():
         output += f"Week {index}:\n"
         for col, value in row.items():
@@ -243,10 +211,21 @@ async def send_player_stats(channel, first_name, last_name, weeks, df_player):
 
 
 async def send_chart_as_attachment(channel, chart_path):
-
     with open(chart_path, 'rb') as f:
         chart = discord.File(f)
         await channel.send(file=chart)
+
+@bot.command()  # Create a command
+async def button(ctx):
+    async def callback(interaction: discord.Interaction):
+        await interaction.response.send_message("Button clicked!")
+        
+    view = discord.ui.View()
+    button = discord.ui.Button(label="Click me!")
+    button.callback = callback
+    view.add_item(button)
+    await ctx.send("This message has a button!", view=view)
+
 
 
 with open("bot auth token.txt", "r") as file:
