@@ -1,2 +1,2 @@
-web: python3 footballBot.py
-worker: python3 footballBot.py
+web: python footballBot.py
+worker: python footballBot.py
