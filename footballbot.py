@@ -91,15 +91,21 @@ def plot_weekly_yards(df_player: pd.DataFrame) -> str:
     x = np.array(total_yards.index).astype(int)
     y = np.array(total_yards).astype(int)
 
-    slope, intercept, r_value, p_value, std_err = linregress(x, y)
+    non_zero_indices = np.nonzero(y)  # get the indices where y is non-zero
+    non_zero_x = x[non_zero_indices]
+    non_zero_y = y[non_zero_indices]
+
+    slope, intercept, r_value, p_value, std_err = linregress(
+        non_zero_x, non_zero_y)
     line = slope * x + intercept
 
     plt.figure(figsize=(12, 6))
-    plt.plot(x, y, 'o')
-    plt.plot(x, line, '-')
-    plt.title('Weekly Yards')
-    plt.xlabel('Week')
-    plt.ylabel('Yards')
+    plt.plot(x, y, 'o', color='blue')
+    plt.plot(x, line, '-', color='green', linewidth=2)
+    plt.title('Weekly Yards', fontsize=18)
+    plt.xticks(np.arange(x.min(), x.max()+1))
+    plt.xlabel('Week', fontsize=14)
+    plt.ylabel('Yards', fontsize=14)
     plt.tight_layout()
 
     chart_path = 'chart.png'
@@ -109,37 +115,42 @@ def plot_weekly_yards(df_player: pd.DataFrame) -> str:
     return chart_path
 
 
-def calculate_fantasy_points(df_player: pd.DataFrame) -> float:
+def calculate_fantasy_points(df_player: pd.DataFrame) -> List[float]:
 
     # Calculate fantasy points for each week based on the multiplier values
     fantasy_points = []
     multipliers = {'PASS_YDS': 0.04, 'PASS_TD': 4,
-                   'INT': -2, 'RUSH_YDS': 0.1, 'RUSH_TD': 6, 'REC_YDS': 0.1, 'REC_TD': 6, 'FUM': -1, 'LOST': -1, 'REC': 1}
+                   'INT': -2, 'RUS_YDS': 0.1, 'RUS_TD': 6, 'REC': 1, 'REC_YDS': 0.1, 'REC_TD': 6, 'FUM': -1, 'LOST': -1}
     for index, row in df_player.iterrows():
         fp = 0
         for col, value in row.items():
             if col in multipliers and value != '':
                 fp += float(value) * multipliers[col]  # convert value to float
         fantasy_points.append(fp)
-
     return fantasy_points
 
 
-def plot_fantasy_points_over_time(df_player: pd.DataFrame, fantasy_points: List[float]) -> str:
+def plot_fantasy_points(df_player: pd.DataFrame, fantasy_points: List[float]) -> str:
 
     # Plot the fantasy points over time
     x = np.array(df_player.index).astype(int)
     y = np.array(fantasy_points).astype(float)
 
-    slope, intercept, r_value, p_value, std_err = linregress(x, y)
+    non_zero_indices = np.nonzero(y)  # get the indices where y is non-zero
+    non_zero_x = x[non_zero_indices]
+    non_zero_y = y[non_zero_indices]
+
+    slope, intercept, r_value, p_value, std_err = linregress(
+        non_zero_x, non_zero_y)
     line = slope * x + intercept
 
-    plt.figure(figsize=(12, 6))
-    plt.plot(x, y, 'o')
-    plt.plot(x, line, '-')
-    plt.title('Fantasy Points Over Time')
-    plt.xlabel('Week')
-    plt.ylabel('Fantasy Points')
+    plt.figure(figsize=(10, 6))
+    plt.plot(x, y, 'o', color='blue', markersize=8, label='Fantasy Points')
+    plt.plot(x, line, '-', color='orange', linewidth=2, label='Trend Line')
+    plt.title('Fantasy Points by Week (PPR)', fontsize=18)
+    plt.xlabel('Week', fontsize=14)
+    plt.ylabel('Fantasy Points', fontsize=14)
+    plt.xticks(np.arange(x.min(), x.max()+1))
     plt.tight_layout()
 
     chart_path = 'fantasy_points_chart.png'
@@ -152,8 +163,8 @@ def plot_fantasy_points_over_time(df_player: pd.DataFrame, fantasy_points: List[
 intents = discord.Intents.default()
 intents.message_content = True
 
-client = discord.Client(command_prefix='!', intents=intents)
-bot = commands.Bot(command_prefix='!', intents=intents)
+client = discord.Client(intents=intents)
+bot = commands.Bot(command_prefix='.', intents=intents)
 
 
 @client.event
@@ -177,22 +188,55 @@ async def on_message(message):
         except ValueError as e:
             await message.channel.send(f"Failed to retrieve stats for {first_name} {last_name}")
             return
-        player_stats = calculate_fantasy_points(df_player)
+        player_points = calculate_fantasy_points(df_player)
 
-        # Send the player stats as a formatted message
-        await send_player_stats(message.channel, first_name, last_name, weeks, df_player)
+        # Create the view with three buttons
+        view = discord.ui.View()
+        statsButton = discord.ui.Button(label="Player Stats")
+        ydsButton = discord.ui.Button(label="Weekly Yards Plot")
+        ptsButton = discord.ui.Button(label="Fantasy Points Plot")
 
-        # Send the yards chart as an attachment
-        yds_chart_path = plot_weekly_yards(df_player)
-        await send_chart_as_attachment(message.channel, yds_chart_path)
+        # Define the callback functions for each button
 
-        # Send the fantasy points chart as an attachment
-        pts_chart_path = plot_fantasy_points_over_time(df_player, player_stats)
-        await send_chart_as_attachment(message.channel, pts_chart_path)
+        async def statsCallback(interaction: discord.Interaction):
+            await send_player_stats(message.channel, first_name, last_name, weeks, df_player)
 
-        # Remove the chart files
-        os.remove(yds_chart_path)
-        os.remove(pts_chart_path)
+        async def ydsCallback(interaction: discord.Interaction):
+            yds_chart_path = plot_weekly_yards(df_player)
+            await send_chart_as_attachment(message.channel, yds_chart_path)
+            os.remove(yds_chart_path)
+
+        async def ptsCallback(interaction: discord.Interaction):
+            pts_chart_path = plot_fantasy_points(df_player, player_points)
+            await send_chart_as_attachment(message.channel, pts_chart_path)
+            os.remove(pts_chart_path)
+
+        # Assign the callback functions to the buttons
+        statsButton.callback = statsCallback
+        ydsButton.callback = ydsCallback
+        ptsButton.callback = ptsCallback
+
+        # Add the buttons to the view
+        view.add_item(statsButton)
+        view.add_item(ydsButton)
+        view.add_item(ptsButton)
+        view.add_item(discord.ui.Button(label="NFL.com page",
+                      style=discord.ButtonStyle.link, url=get_player_url(first_name, last_name)))
+
+        # Send the message with the view
+        output = f"**{first_name} {last_name} - Overview for last {weeks} weeks**\n\n"
+        yards_cols = [col for col in df_player.columns if 'YDS' in col]
+        total_yards = df_player[yards_cols].apply(
+            pd.to_numeric, errors='coerce').sum(axis=1).astype(int)
+
+        # Filter out rows with NaN values
+        total_yards = total_yards[~np.isnan(total_yards)]
+        output += f"Total Yards: {total_yards.sum()}\n"
+        output += f"Avg Yards (disregarding DNP): {np.ma.masked_equal(total_yards, 0).mean():.2f}\n"
+        output += f"Total Fantasy Points: {sum(player_points):.2f}\n"
+        output += f"Avg Fantasy Points (disregarding DNP): {sum(player_points)/len([p for p in player_points if p != 0]):.2f}\n"
+        output += f"Please select an option:"
+        await message.channel.send(content=output, view=view)
 
 
 async def send_player_stats(channel, first_name, last_name, weeks, df_player):
@@ -215,19 +259,6 @@ async def send_chart_as_attachment(channel, chart_path):
         chart = discord.File(f)
         await channel.send(file=chart)
 
-@bot.command()  # Create a command
-async def button(ctx):
-    async def callback(interaction: discord.Interaction):
-        await interaction.response.send_message("Button clicked!")
-        
-    view = discord.ui.View()
-    button = discord.ui.Button(label="Click me!")
-    button.callback = callback
-    view.add_item(button)
-    await ctx.send("This message has a button!", view=view)
-
-
-
-with open("bot auth token.txt", "r") as file:
-    file_contents = file.read()
-client.run(file_contents)
+with open("bot auth token.txt", "r") as token:
+    token = token.read()
+client.run(token)
