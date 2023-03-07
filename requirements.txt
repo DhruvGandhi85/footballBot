@@ -34,7 +34,6 @@ jupyter_client==7.3.5
 jupyterlab-pygments==0.2.2
 jupyterlab-widgets==3.0.3
 kiwisolver==1.4.4
-macholib @ file:///System/Volumes/Data/SWE/Apps/DT/BuildRoots/BuildRoot2/ActiveBuildRoot/Library/Caches/com.apple.xbs/Sources/python3/python3-124/macholib-1.15.2-py2.py3-none-any.whl
 MarkupSafe==2.1.1
 matplotlib==3.6.3
 matplotlib-inline==0.1.6
@@ -69,7 +68,6 @@ pyzmq==24.0.1
 qtconsole==5.3.2
 QtPy==2.2.1
 Send2Trash==1.8.0
-six @ file:///System/Volumes/Data/SWE/Apps/DT/BuildRoots/BuildRoot2/ActiveBuildRoot/Library/Caches/com.apple.xbs/Sources/python3/python3-124/six-1.15.0-py2.py3-none-any.whl
 soupsieve==2.3.2.post1
 stack-data==0.5.1
 terminado==0.16.0
