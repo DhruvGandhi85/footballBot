@@ -259,6 +259,6 @@ async def send_chart_as_attachment(channel, chart_path):
         chart = discord.File(f)
         await channel.send(file=chart)
 
-with open("bot auth token.txt", "r") as token:
+with open(".env", "r") as token:
     token = token.read()
 client.run(token)
