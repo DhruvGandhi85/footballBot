@@ -179,6 +179,9 @@ async def on_message(message):
 
     if message.content.startswith('$player'):
         args = message.content.split('$player ')[1].split()
+        if len(args) != 2 and len(args) != 3:
+            await message.channel.send(f"Invalid Input. Please use the following format: $player <first_name> <last_name> <weeks>")
+            return
         if len(args) == 3:
             first_name, last_name, weeks = args[0], args[1], int(args[2])
         elif len(args) == 2:
