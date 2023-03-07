@@ -19,7 +19,6 @@ et-xmlfile==1.1.0
 executing==1.1.0
 fastjsonschema==2.16.2
 fonttools==4.38.0
-future @ file:///System/Volumes/Data/SWE/Apps/DT/BuildRoots/BuildRoot2/ActiveBuildRoot/Library/Caches/com.apple.xbs/Sources/python3/python3-124/future-0.18.2-py3-none-any.whl
 importlib-metadata==5.0.0
 ipykernel==6.16.0
 ipython==8.5.0
