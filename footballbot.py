@@ -224,7 +224,7 @@ async def on_message(message):
                       style=discord.ButtonStyle.link, url=get_player_url(first_name, last_name)))
 
         # Send the message with the view
-        output = f"**{first_name} {last_name} - Overview for last {weeks} weeks**\n\n"
+        output = f"**{first_name.capitalize()} {last_name.capitalize()} - Overview for last {weeks} weeks**\n\n"
         yards_cols = [col for col in df_player.columns if 'YDS' in col]
         total_yards = df_player[yards_cols].apply(
             pd.to_numeric, errors='coerce').sum(axis=1).astype(int)
@@ -240,7 +240,7 @@ async def on_message(message):
 
 
 async def send_player_stats(channel, first_name, last_name, weeks, df_player):
-    output = f"**{first_name} {last_name} - Stats for last {weeks} weeks:**\n\n"
+    output = f"**{first_name.capitalize()} {last_name.capitalize()} - Stats for last {weeks} weeks:**\n\n"
     for index, row in df_player.iterrows():
         output += f"Week {index}:\n"
         for col, value in row.items():
