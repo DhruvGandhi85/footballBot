@@ -7,4 +7,4 @@ Type '$player first_name last_name weeks' to get a player's stats over a period 
 
 Hosted on Heroku.
 
-<!-- heroku ps:scale worker=1 -->
+<!-- heroku ps:scale worker=1 -a football-bot-disc -->

@@ -13,9 +13,9 @@ from scipy.stats import linregress
 from discord.ext import commands
 
 
-def get_player_url(first_name: str, last_name: str) -> str:
+def get_player_url(first_name: str, last_name: str, year: int) -> str:
     player = f"{first_name}-{last_name}".lower()
-    return f'https://www.nfl.com/players/{player}/stats/logs'
+    return f'https://www.nfl.com/players/{player}/stats/logs/{year}/'
 
 
 def get_player_position(headers: List[str]) -> str:
@@ -50,69 +50,39 @@ def get_renamed_headers(headers: List[str], player_pos: str) -> List[str]:
     return headers[1:]
 
 
-def get_player_stats(first_name: str, last_name: str, weeks: int) -> pd.DataFrame:
-    url = get_player_url(first_name, last_name)
-    response = requests.get(url)
-    soup = BeautifulSoup(response.text, 'html.parser')
-    stats_tables = soup.find_all('table')
-    try:
-        headers = [th.text.strip()
-                   for th in stats_tables[1].select('thead th')]
-    except Exception as e:
-        raise ValueError(
-            f"Failed to retrieve stats for {first_name} {last_name}")
-    player_pos = get_player_position(headers)
-    renamed_headers = get_renamed_headers(headers, player_pos)
-
-    data_rows = [[td.text.strip() for td in tr.select('td')]
-                 for tr in stats_tables[1].select('tbody tr')][:weeks]
-
+def get_player_stats(first_name: str, last_name: str, weeks: int, start_year: int, end_year: int) -> pd.DataFrame:
     career_stats = {}
-    for row in data_rows:
-        week = row[0]
-        stats = row[1:]
-        for i, header in enumerate(renamed_headers):
-            career_stats[week] = career_stats.get(week, {})
-            career_stats[week][header] = stats[i]
+    for year in range(start_year, end_year+1):
+        url = get_player_url(first_name, last_name, year)
+        response = requests.get(url)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        stats_tables = soup.find_all('table')
+        try:
+            if year == 2020:
+                headers = [th.text.strip() for th in stats_tables[0].select('thead th')]
+            else:
+                headers = [th.text.strip() for th in stats_tables[1].select('thead th')]
+        except Exception as e:
+            raise ValueError(f"Failed to retrieve stats for {first_name} {last_name}")
+        player_pos = get_player_position(headers)
+        renamed_headers = get_renamed_headers(headers, player_pos)
 
-    return pd.DataFrame.from_dict(career_stats, orient='index')
+        if year == 2020:
+            data_rows = [[td.text.strip() for td in tr.select('td')] for tr in stats_tables[0].select('tbody tr')][:weeks]
+        else:
+            data_rows = [[td.text.strip() for td in tr.select('td')] for tr in stats_tables[1].select('tbody tr')][:weeks]
 
+        for row in data_rows:
+            week = f"{row[0]}-{year}"
+            stats = row[1:]
+            for i, header in enumerate(renamed_headers):
+                career_stats[week] = career_stats.get(week, {})
+                career_stats[week][header] = stats[i]
 
-def plot_weekly_yards(df_player: pd.DataFrame) -> str:
-    yards_cols = [col for col in df_player.columns if 'YDS' in col]
+    career_df = pd.DataFrame.from_dict(career_stats, orient='index')
 
-    total_yards = df_player[yards_cols].apply(
-        pd.to_numeric, errors='coerce').sum(axis=1).astype(int)
+    return career_df
 
-    # Filter out rows with NaN values
-    total_yards = total_yards[~np.isnan(total_yards)]
-
-    # Calculate line of best fit
-    x = np.array(total_yards.index).astype(int)
-    y = np.array(total_yards).astype(int)
-
-    non_zero_indices = np.nonzero(y)  # get the indices where y is non-zero
-    non_zero_x = x[non_zero_indices]
-    non_zero_y = y[non_zero_indices]
-
-    slope, intercept, r_value, p_value, std_err = linregress(
-        non_zero_x, non_zero_y)
-    line = slope * x + intercept
-
-    plt.figure(figsize=(12, 6))
-    plt.plot(x, y, 'o', color='blue')
-    plt.plot(x, line, '-', color='green', linewidth=2)
-    plt.title('Weekly Yards', fontsize=18)
-    plt.xticks(np.arange(x.min(), x.max()+1))
-    plt.xlabel('Week', fontsize=14)
-    plt.ylabel('Yards', fontsize=14)
-    plt.tight_layout()
-
-    chart_path = 'chart.png'
-    plt.savefig(chart_path)
-    plt.close()
-
-    return chart_path
 
 
 def calculate_fantasy_points(df_player: pd.DataFrame) -> List[float]:
@@ -130,34 +100,83 @@ def calculate_fantasy_points(df_player: pd.DataFrame) -> List[float]:
     return fantasy_points
 
 
-def plot_fantasy_points(df_player: pd.DataFrame, fantasy_points: List[float]) -> str:
+def plot_weekly_yards(df_player: pd.DataFrame) -> List[str]:
+    df = df_player.copy()
+    yards_cols = [col for col in df_player.columns if 'YDS' in col]
+    total_yards = df_player[yards_cols].apply(
+        pd.to_numeric, errors='coerce').sum(axis=1).astype(int)
 
-    # Plot the fantasy points over time
-    x = np.array(df_player.index).astype(int)
-    y = np.array(fantasy_points).astype(float)
+    # Filter out rows with NaN values
+    total_yards = total_yards[~np.isnan(total_yards)]
+    df['Total Yards'] = total_yards
+    df['Week'], df['Year'] = df.index.str.split('-').str
+    grouped = df.groupby('Year')
 
-    non_zero_indices = np.nonzero(y)  # get the indices where y is non-zero
-    non_zero_x = x[non_zero_indices]
-    non_zero_y = y[non_zero_indices]
+    chart_paths = []
+    for year, year_df in grouped:
+        x_weeks = year_df['Week'].astype(int)
+        y = year_df['Total Yards']
 
-    slope, intercept, r_value, p_value, std_err = linregress(
-        non_zero_x, non_zero_y)
-    line = slope * x + intercept
+        slope, intercept, r_value, p_value, std_err = linregress(
+            x_weeks, y)
+        line = slope * x_weeks + intercept
 
-    plt.figure(figsize=(10, 6))
-    plt.plot(x, y, 'o', color='blue', markersize=8, label='Fantasy Points')
-    plt.plot(x, line, '-', color='orange', linewidth=2, label='Trend Line')
-    plt.title('Fantasy Points by Week (PPR)', fontsize=18)
-    plt.xlabel('Week', fontsize=14)
-    plt.ylabel('Fantasy Points', fontsize=14)
-    plt.xticks(np.arange(x.min(), x.max()+1))
-    plt.tight_layout()
+        plt.figure(figsize=(10, 6))
+        plt.plot(x_weeks, y, 'o', color='blue')
+        plt.plot(x_weeks, line, '-', color='green', linewidth=2)
+        plt.title(f'Total Yards per Week - {year}', fontsize=18)
+        plt.xlabel('Week', fontsize=14)
+        plt.ylabel('Total Yards', fontsize=14)
+        # Set tick locations and labels
+        x_ticks = np.unique(x_weeks)
+        plt.xticks(x_ticks)
+        plt.tight_layout()
 
-    chart_path = 'fantasy_points_chart.png'
-    plt.savefig(chart_path)
-    plt.close()
+        chart_path = f'fantasy_points_chart_{year}.png'
+        plt.savefig(chart_path)
+        plt.close()
+        chart_paths.append(chart_path)
 
-    return chart_path
+    return chart_paths
+
+
+def plot_fantasy_points(df_player: pd.DataFrame, fantasy_points: List[float]) -> List[str]:
+    # Group the data by week and year, and take the mean of the fantasy points for each group
+    df = df_player.copy()
+    df['Fantasy Points'] = fantasy_points
+    df['Week'], df['Year'] = df.index.str.split('-').str
+    df['Fantasy Points'] = pd.to_numeric(df['Fantasy Points'])
+    grouped = df.groupby('Year')
+
+    chart_paths = []
+    for year, year_df in grouped:
+        x_weeks = year_df['Week'].astype(int)
+        y = year_df['Fantasy Points']
+
+        slope, intercept, r_value, p_value, std_err = linregress(
+            x_weeks, y)
+        line = slope * x_weeks + intercept
+
+        plt.figure(figsize=(10, 6))
+        plt.plot(x_weeks, y, 'o', color='blue',
+                 markersize=8, label='Fantasy Points')
+        plt.plot(x_weeks, line, '-', color='orange',
+                 linewidth=2, label='Trend Line')
+        plt.title(f'Fantasy Points by Week (PPR) - {year}', fontsize=18)
+        plt.xlabel('Week', fontsize=14)
+        plt.ylabel('Fantasy Points', fontsize=14)
+
+        # Set tick locations and labels
+        x_ticks = np.unique(x_weeks)
+        plt.xticks(x_ticks)
+
+        plt.tight_layout()
+        chart_path = f'fantasy_points_chart_{year}.png'
+        plt.savefig(chart_path)
+        plt.close()
+        chart_paths.append(chart_path)
+
+    return chart_paths
 
 
 intents = discord.Intents.default()
@@ -179,17 +198,32 @@ async def on_message(message):
 
     if message.content.startswith('$player'):
         args = message.content.split('$player ')[1].split()
-        if len(args) != 2 and len(args) != 3:
-            await message.channel.send(f"Invalid Input. Please use the following format: $player <first_name> <last_name> <weeks>")
+        if len(args) < 2 or len(args) > 5:
+            await message.channel.send(f"Invalid Input. Please use the following format: $player <first_name> <last_name> [<weeks> [<start_year> <end_year>]]")
             return
-        if len(args) == 3:
-            first_name, last_name, weeks = args[0], args[1], int(args[2])
-        elif len(args) == 2:
-            first_name, last_name, weeks = args[0], args[1], 5
+        first_name, last_name = args[0], args[1]
+        weeks = 18
+        start_year = end_year = 2022
+        if len(args) >= 3:
+            if int(args[2]) > 18 or int(args[2]) < 1:
+                if int(args[2]) > 1900 and int(args[2]) < 2100:
+                    start_year = int(args[2])
+                else:
+                    await message.channel.send(f"Incorrect number of weeks. Please enter a number between 1 and 18.")
+            else:
+                weeks = int(args[2])
+        if len(args) >= 4:
+            if int(args[3]) > 1900 and int(args[3]) < 2100:
+                end_year = int(args[3])
+            else:
+                start_year = int(args[3])
+        if len(args) == 5:
+            end_year = int(args[4])
         try:
-            df_player = get_player_stats(first_name, last_name, weeks)
+            df_player = get_player_stats(
+                first_name, last_name, weeks, start_year, end_year)
         except ValueError as e:
-            await message.channel.send(f"Failed to retrieve stats for {first_name} {last_name}")
+            await message.channel.send(f"Failed to retrieve stats for {first_name} {last_name} in {start_year}-{end_year}. Make sure the player name is spelled correctly and the years are valid. You do not need to account for number of games a season.")
             return
         player_points = calculate_fantasy_points(df_player)
 
@@ -202,17 +236,19 @@ async def on_message(message):
         # Define the callback functions for each button
 
         async def statsCallback(interaction: discord.Interaction):
-            await send_player_stats(message.channel, first_name, last_name, weeks, df_player)
+            await send_player_stats(message.channel, df_player)
 
         async def ydsCallback(interaction: discord.Interaction):
             yds_chart_path = plot_weekly_yards(df_player)
-            await send_chart_as_attachment(message.channel, yds_chart_path)
-            os.remove(yds_chart_path)
+            await send_charts_as_attachments(message.channel, yds_chart_path)
+            for i in range(len(yds_chart_path)):
+                os.remove(yds_chart_path[i])
 
         async def ptsCallback(interaction: discord.Interaction):
             pts_chart_path = plot_fantasy_points(df_player, player_points)
-            await send_chart_as_attachment(message.channel, pts_chart_path)
-            os.remove(pts_chart_path)
+            await send_charts_as_attachments(message.channel, pts_chart_path)
+            for i in range(len(pts_chart_path)):
+                os.remove(pts_chart_path[i])
 
         # Assign the callback functions to the buttons
         statsButton.callback = statsCallback
@@ -224,10 +260,10 @@ async def on_message(message):
         view.add_item(ydsButton)
         view.add_item(ptsButton)
         view.add_item(discord.ui.Button(label="NFL.com page",
-                      style=discord.ButtonStyle.link, url=get_player_url(first_name, last_name)))
+                      style=discord.ButtonStyle.link, url=get_player_url(first_name, last_name, end_year)))
 
         # Send the message with the view
-        output = f"**{first_name.capitalize()} {last_name.capitalize()} - Overview for last {weeks} weeks**\n\n"
+        output = f"**{first_name.capitalize()} {last_name.capitalize()} - Overview for last {weeks} weeks per year from {start_year} to {end_year} **\n\n"
         yards_cols = [col for col in df_player.columns if 'YDS' in col]
         total_yards = df_player[yards_cols].apply(
             pd.to_numeric, errors='coerce').sum(axis=1).astype(int)
@@ -242,25 +278,29 @@ async def on_message(message):
         await message.channel.send(content=output, view=view)
 
 
-async def send_player_stats(channel, first_name, last_name, weeks, df_player):
-    output = f"**{first_name.capitalize()} {last_name.capitalize()} - Stats for last {weeks} weeks:**\n\n"
+async def send_player_stats(channel, df_player):
+    output = ""
     for index, row in df_player.iterrows():
         output += f"Week {index}:\n"
+        row_output = ""
         for col, value in row.items():
-            output += f"{col}: {value} | "
-        output += "\n\n"
-    messages = [output[i:i+2000] for i in range(0, len(output), 2000)]
-    for i, msg in enumerate(messages):
-        if i == 0:
-            await channel.send(msg)
+            row_output += f"{col}: {value} | "
+        # Check if adding the current row to the current message will exceed the message length limit
+        if len(output) + len(row_output) > 2000:
+            # If it will, send the current message and start a new one with the current row
+            await channel.send("" + output + "")
+            output = row_output + "\n\n"
         else:
-            await channel.send(msg[:1997] + '...')
+            # If it won't, append the current row to the current message
+            output += row_output + "\n\n"
+    await channel.send("" + output + "")
 
 
-async def send_chart_as_attachment(channel, chart_path):
-    with open(chart_path, 'rb') as f:
-        chart = discord.File(f)
-        await channel.send(file=chart)
+async def send_charts_as_attachments(channel, chart_paths):
+    for chart_path in chart_paths:
+        with open(chart_path, 'rb') as f:
+            chart = discord.File(f)
+            await channel.send(file=chart)
 
 
 token = os.environ['TOKEN']
