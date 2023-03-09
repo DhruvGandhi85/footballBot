@@ -59,18 +59,23 @@ def get_player_stats(first_name: str, last_name: str, weeks: int, start_year: in
         stats_tables = soup.find_all('table')
         try:
             if year == 2020:
-                headers = [th.text.strip() for th in stats_tables[0].select('thead th')]
+                headers = [th.text.strip()
+                           for th in stats_tables[0].select('thead th')]
             else:
-                headers = [th.text.strip() for th in stats_tables[1].select('thead th')]
+                headers = [th.text.strip()
+                           for th in stats_tables[1].select('thead th')]
         except Exception as e:
-            raise ValueError(f"Failed to retrieve stats for {first_name} {last_name}")
+            raise ValueError(
+                f"Failed to retrieve stats for {first_name} {last_name}")
         player_pos = get_player_position(headers)
         renamed_headers = get_renamed_headers(headers, player_pos)
 
         if year == 2020:
-            data_rows = [[td.text.strip() for td in tr.select('td')] for tr in stats_tables[0].select('tbody tr')][:weeks]
+            data_rows = [[td.text.strip() for td in tr.select('td')]
+                         for tr in stats_tables[0].select('tbody tr')][:weeks]
         else:
-            data_rows = [[td.text.strip() for td in tr.select('td')] for tr in stats_tables[1].select('tbody tr')][:weeks]
+            data_rows = [[td.text.strip() for td in tr.select('td')]
+                         for tr in stats_tables[1].select('tbody tr')][:weeks]
 
         for row in data_rows:
             week = f"{row[0]}-{year}"
@@ -82,7 +87,6 @@ def get_player_stats(first_name: str, last_name: str, weeks: int, start_year: in
     career_df = pd.DataFrame.from_dict(career_stats, orient='index')
 
     return career_df
-
 
 
 def calculate_fantasy_points(df_player: pd.DataFrame) -> List[float]:
@@ -259,11 +263,14 @@ async def on_message(message):
         view.add_item(statsButton)
         view.add_item(ydsButton)
         view.add_item(ptsButton)
-        view.add_item(discord.ui.Button(label="NFL.com page",
-                      style=discord.ButtonStyle.link, url=get_player_url(first_name, last_name, end_year)))
+        view.add_item(discord.ui.Button(label="Player News",
+                      style=discord.ButtonStyle.link, url=f'https://www.nfl.com/players/{first_name}-{last_name}/'))
 
         # Send the message with the view
-        output = f"**{first_name.capitalize()} {last_name.capitalize()} - Overview for last {weeks} weeks per year from {start_year} to {end_year} **\n\n"
+        if start_year == end_year:
+            output = f"**{first_name.capitalize()} {last_name.capitalize()} - Overview for last {weeks} weeks per year from {start_year} **\n\n"
+        else:
+            output = f"**{first_name.capitalize()} {last_name.capitalize()} - Overview for last {weeks} weeks per year from {start_year} to {end_year}**\n\n"
         yards_cols = [col for col in df_player.columns if 'YDS' in col]
         total_yards = df_player[yards_cols].apply(
             pd.to_numeric, errors='coerce').sum(axis=1).astype(int)
