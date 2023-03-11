@@ -13,6 +13,6 @@ Possible combinations of arguments:
 - `$player first_name last_name weeks start_year end_year` for "weeks" number of games from start_year to end_year.
 
 
-Hosted on Heroku.
+Hosted on Heroku or Raspberry Pi.
 
 <!-- heroku ps:scale worker=1 -a football-bot-disc -->
