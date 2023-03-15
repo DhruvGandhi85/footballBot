@@ -310,5 +310,6 @@ async def send_charts_as_attachments(channel, chart_paths):
             await channel.send(file=chart)
 
 
-token = os.environ['TOKEN']
+with open('token.txt', 'r') as f:
+    token = f.readline()
 client.run(token)
