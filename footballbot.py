@@ -12,12 +12,12 @@ from bs4 import BeautifulSoup
 from scipy.stats import linregress
 from discord.ext import commands
 
-
+# creates url from player name and year
 def get_player_url(first_name: str, last_name: str, year: int) -> str:
     player = f"{first_name}-{last_name}".lower()
     return f'https://www.nfl.com/players/{player}/stats/logs/{year}/'
 
-
+# gets player position based on table columns
 def get_player_position(headers: List[str]) -> str:
     for i, header in enumerate(headers):
         if i == 4:
@@ -29,7 +29,7 @@ def get_player_position(headers: List[str]) -> str:
                 return 'RB'
     return ''
 
-
+# renames headers based on player position
 def get_renamed_headers(headers: List[str], player_pos: str) -> List[str]:
     for i, header in enumerate(headers):
         if player_pos == 'QB':
@@ -49,7 +49,7 @@ def get_renamed_headers(headers: List[str], player_pos: str) -> List[str]:
                 headers[i] = f"RUS_{header}"
     return headers[1:]
 
-
+# scrapes the player stats from the url
 def get_player_stats(first_name: str, last_name: str, weeks: int, start_year: int, end_year: int) -> pd.DataFrame:
     career_stats = {}
     for year in range(start_year, end_year+1):
@@ -88,7 +88,7 @@ def get_player_stats(first_name: str, last_name: str, weeks: int, start_year: in
 
     return career_df
 
-
+# calculates fantasy points based on stats
 def calculate_fantasy_points(df_player: pd.DataFrame) -> List[float]:
 
     # Calculate fantasy points for each week based on the multiplier values
@@ -103,7 +103,7 @@ def calculate_fantasy_points(df_player: pd.DataFrame) -> List[float]:
         fantasy_points.append(fp)
     return fantasy_points
 
-
+# plots total yards per week using matplotlib
 def plot_weekly_yards(df_player: pd.DataFrame) -> List[str]:
     df = df_player.copy()
     yards_cols = [col for col in df_player.columns if 'YDS' in col]
@@ -143,7 +143,7 @@ def plot_weekly_yards(df_player: pd.DataFrame) -> List[str]:
 
     return chart_paths
 
-
+# plots fantasy points per week using matplotlib
 def plot_fantasy_points(df_player: pd.DataFrame, fantasy_points: List[float]) -> List[str]:
     # Group the data by week and year, and take the mean of the fantasy points for each group
     df = df_player.copy()
@@ -189,12 +189,12 @@ intents.message_content = True
 client = discord.Client(intents=intents)
 bot = commands.Bot(command_prefix='.', intents=intents)
 
-
+# Discord bot function to allow inputs to be sent to the bot
 @client.event
 async def on_ready():
     print('Logged in as {0.user}'.format(client))
 
-
+# Discord bot function when a message is sent to the bot
 @client.event
 async def on_message(message):
     if message.author == client.user:
@@ -284,7 +284,7 @@ async def on_message(message):
         output += f"Please select an option:"
         await message.channel.send(content=output, view=view)
 
-
+# Discord bot replies with a message of the player's stats if requested
 async def send_player_stats(channel, df_player):
     output = ""
     for index, row in df_player.iterrows():
@@ -302,7 +302,7 @@ async def send_player_stats(channel, df_player):
             output += row_output + "\n\n"
     await channel.send("" + output + "")
 
-
+# Discord bot replies with a message of the player's yearly chart if requested
 async def send_charts_as_attachments(channel, chart_paths):
     for chart_path in chart_paths:
         with open(chart_path, 'rb') as f:
