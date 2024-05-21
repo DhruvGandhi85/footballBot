@@ -12,6 +12,9 @@ Possible combinations of arguments:
 - `$player first_name last_name weeks start_year` for "weeks" number of games from start_year to last season.
 - `$player first_name last_name weeks start_year end_year` for "weeks" number of games from start_year to end_year.
 
+https://github.com/DhruvGandhi85/footballBot/assets/37405800/93317f0b-cef4-4393-bc3d-c74d74e12f7c
+
+
 
 Hosted on Heroku. Raspberry Pi hosting coming soon.
 
